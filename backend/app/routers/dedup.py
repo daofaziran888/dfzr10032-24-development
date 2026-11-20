@@ -1,4 +1,4 @@
-"""采集去重接口：维护去重策略，覆盖提交配置、启用策略、停用策略等动作。"""
+"""采集去重接口：维护去重策略，并提供有效内容 / 拦截样本的分流与执行。"""
 from __future__ import annotations
 
 from typing import Any
@@ -6,7 +6,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.schemas import ActionResult, EntryPayload, PageResult
-from app.services.dedup import DedupService
+from app.services.dedup import BLOCKED_MODULE, VALID_MODULE, DedupService, run_dedup, split_view
+from app.store import store
 
 router = APIRouter(prefix="/api/dedup", tags=["采集去重"])
 
@@ -21,6 +22,32 @@ def export_entries() -> dict[str, Any]:
     """导出采集去重清单：返回当前过滤条件下的全量数据。"""
     items, total = service.list_entries(page=1, size=10000)
     return {"module": "dedup", "total": total, "items": items}
+
+
+@router.get("/split", response_model=dict)
+def get_split() -> dict[str, Any]:
+    """分流预览：按当前页面样本给出有效内容与拦截样本，不落库。"""
+    return split_view()
+
+
+@router.get("/valid", response_model=dict)
+def list_valid() -> dict[str, Any]:
+    """去重后的有效内容；已保留的公告正文不会被重复写入。"""
+    rows = store.rows(VALID_MODULE)
+    return {"total": len(rows), "items": rows}
+
+
+@router.get("/blocked", response_model=dict)
+def list_blocked() -> dict[str, Any]:
+    """拦截样本：按错误模板合并，不改写任何公告正文记录。"""
+    rows = store.rows(BLOCKED_MODULE)
+    return {"total": len(rows), "items": rows}
+
+
+@router.post("/run", response_model=dict)
+def run() -> dict[str, Any]:
+    """执行去重分流，把有效内容与拦截样本分别落库。"""
+    return run_dedup()
 
 
 @router.get("", response_model=PageResult[dict])

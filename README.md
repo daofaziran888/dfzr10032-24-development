@@ -66,6 +66,10 @@ npm run dev
 | 数据流转编排 | `flow` | 流转管道 | 管道编号、管道名称、起始节点 |
 | 数据血缘追踪 | `lineage` | 血缘关系 | 关系编号、上游节点、下游节点 |
 | 采集报告 | `report` | 采集报告 | 报告编号、采集源、统计周期 |
+| 页面样本 | `page_sample` | 页面样本 | 样本编号、来源站点、采集状态码、正文片段 |
+| 软错误页面隔离 | `soft_error` | 隔离记录 | 隔离编号、来源站点、错误模板、响应ID |
+| 公告办事台 | `announcement` | 公告 | 公告编号、停办日期、正文指纹、来源响应 |
+| 站点追问 | `inquiry` | 追问 | 追问编号、隔离编号、响应ID |
 
 ## 约定
 
@@ -73,3 +77,30 @@ npm run dev
   `backend/app/routers/<模块>.py`，业务规则在 `backend/app/services/<模块>.py`。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+
+## 软错误页面处理链路
+
+网页采集规则负责选择器配置，但选择器命中不等于拿到有效公告：站点可能在状态码 200 的
+报错占位页里也渲染同一套标题和正文容器。处理链路如下：
+
+1. **页面样本**（`page_sample`）：留存解析成功返回的原始页面，采集状态码、正文片段、
+   命中标记都原样保存。正文完整性校验会给出 `MISSING_SELECTOR_MISS` /
+   `MISSING_EMPTY_BODY` / `MISSING_HTTP_STATUS` 原因码；正文缺失的样本不会生成公告。
+   证据接口 `GET /api/page_sample/{id}/evidence` 逐项指向样本原始字段，可回查。
+2. **检测**：需要站点页面标记与页面实际内容两类证据。正文容器/页尾命中标记且正文没有
+   真实内容（日期、停办措辞）判为软错误页面；正文有真实内容却命中标记判为「证据冲突」；
+   标题上的「未开放」是站点占位页与正式公告共用的文案，不单独触发软错误，短正文公告
+   只要正文完整、没有结构性错误标记就按有效公告处理。
+3. **隔离**（`soft_error`）：按「站点 + 错误模板」合并，同一模板下的多个响应只留一条
+   隔离记录，证据里逐条保留响应ID。`POST /api/soft_error/scan` 可重复扫描，保留编号与
+   人工处理状态，不触碰公告正文。
+4. **去重**（`dedup`）：有效内容按「站点 + 标题 + 正文指纹」去重写入 `dedup_valid`；
+   拦截样本按错误模板合并写入 `dedup_blocked`。已发布的公告正文只登记命中，不重写。
+5. **公告办事台**（`announcement`）：`POST /api/announcement/publish` 只接受去重结果，
+   正文为空或来源样本被隔离时拒绝发布；发布时记录正文指纹。`GET
+   /api/announcement/{id}/verify` 按留存原文重新计算指纹，已确认的公告可以独立核对。
+   `GET /api/announcement/day?date=YYYY-MM-DD` 回答“这一天采用哪份公告、追问针对哪个响应”。
+6. **站点追问**（`inquiry`）：`POST /api/inquiry/raise` 必须携带隔离编号和响应ID，
+   响应不属于该隔离记录时直接拒绝并列出可选响应。
+
+自检：`cd backend && .venv/bin/python -I -m unittest discover -s tests -t . -v`。

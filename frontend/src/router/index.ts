@@ -18,6 +18,10 @@ const Transform = () => import('@/views/transform/index.vue')
 const Flow = () => import('@/views/flow/index.vue')
 const Lineage = () => import('@/views/lineage/index.vue')
 const Report = () => import('@/views/report/index.vue')
+const PageSample = () => import('@/views/page_sample/index.vue')
+const SoftError = () => import('@/views/soft_error/index.vue')
+const Announcement = () => import('@/views/announcement/index.vue')
+const Inquiry = () => import('@/views/inquiry/index.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -40,6 +44,10 @@ const router = createRouter({
     { path: '/flow', name: 'flow', component: Flow },
     { path: '/lineage', name: 'lineage', component: Lineage },
     { path: '/report', name: 'report', component: Report },
+    { path: '/page_sample', name: 'page_sample', component: PageSample },
+    { path: '/soft_error', name: 'soft_error', component: SoftError },
+    { path: '/announcement', name: 'announcement', component: Announcement },
+    { path: '/inquiry', name: 'inquiry', component: Inquiry },
   ],
 })
 

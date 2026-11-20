@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.bootstrap import bootstrap
 from app.config import settings
 from app.routers import ROUTERS
 from app.store import store
@@ -24,6 +25,10 @@ app.add_middleware(
 
 for module in ROUTERS:
     app.include_router(module.router)
+
+# 启动时先算一遍隔离与去重，页面打开就能看到有效内容 / 拦截样本的分流结果；
+# 这里只做分析落库，不自动发布公告、也不自动向站点发出追问。
+bootstrap()
 
 
 @app.get("/api/health")
